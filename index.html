@@ -96,8 +96,8 @@ body.scanning .view{height:42vh}
     <button class="btn" type="button" id="live">카메라로 스캔</button>
     <div class="view" id="view" hidden><video id="vid" playsinline muted></video><div class="aim"></div><button class="ov tr" type="button" id="stop">멈춤</button><button class="ov bl" type="button" id="ovManual">코드 입력</button><div class="ovst" id="ovst"></div></div>
     <input id="cam" type="file" accept="image/*" capture="environment" hidden>
-    <div class="minor"><label class="link" for="cam" id="camBtn" tabindex="0">사진으로 읽기</label><button class="link" type="button" id="manual" aria-expanded="false" aria-controls="f">코드 직접 입력</button></div>
-    <form class="row" id="f" hidden>
+    <div class="minor"><label class="link" for="cam" id="camBtn" tabindex="0">사진으로 읽기</label></div>
+    <form class="row" id="f">
       <input id="q" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 115108 또는 140-115108" aria-label="품번 입력">
       <button class="btn2" type="submit">조회</button>
     </form>
@@ -248,8 +248,7 @@ function render(list,raw){
 function status(msg,err){const o=$('ovst');if(o)o.textContent=msg;const s=$('st');s.textContent=msg;s.classList.toggle('err',!!err)}
 
 $('stop').addEventListener('click',()=>{stopLive();status('')});
-$('ovManual').addEventListener('click',()=>{stopLive();status('');const f=$('f');f.hidden=false;$('manual').setAttribute('aria-expanded',true);$('q').value='';$('q').focus()});
-$('manual').addEventListener('click',()=>{const f=$('f'),open=f.hidden;f.hidden=!open;$('manual').setAttribute('aria-expanded',open);if(open){$('q').value='';$('q').focus()}});
+$('ovManual').addEventListener('click',()=>{stopLive();status('');$('q').value='';$('q').focus()});
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('q').value.trim();if(!v)return;render(lookup(v),v);status('')});
 $('camBtn').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('cam').click()}});
 
@@ -398,6 +397,6 @@ $('live').addEventListener('click',async()=>{
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)stopLive()});
 
 // 첫 화면 예시: 사용자가 보여 준 박스 코드
-$('q').value='140-115108';render(lookup('140115108'),'');status('예시: 140-115108 조회 결과');
+render(lookup('140115108'),'');status('예시: 140-115108 조회 결과');
 </script>
 </body></html>
