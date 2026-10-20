@@ -285,7 +285,7 @@ for(const r of CUR){
 }
 
 // 실시간 스캔: 후면 카메라 → 0.25초마다 프레임 판독 → 품번이면 멈추고 결과 표시
-let stream=null,timer=null,busy=false;
+let stream=null,timer=null,busy=false,lastKey="";
 const vid=$('vid');
 function stopLive(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('view').hidden=true;$('live').textContent='카메라로 스캔'}
 function showHits(texts){
@@ -324,15 +324,18 @@ $('live').addEventListener('click',async()=>{
   }catch(err){status('카메라를 켜지 못했습니다. 브라우저 설정에서 이 사이트의 카메라 권한을 허용해 주십시오.',true);stream=null;return}
   vid.srcObject=stream;await vid.play();
   $('view').hidden=false;$('live').textContent='스캔 멈추기';$('results').textContent='';
-  status('바코드를 노란 칸에 맞춰 주십시오. 품번 바코드를 찾으면 자동으로 멈춥니다.');
+  lastKey="";status("바코드를 노란 칸에 맞춰 주십시오. 박스를 바꿔 가며 계속 스캔할 수 있습니다.");
   timer=setInterval(async()=>{
     if(busy)return;busy=true;
     try{
       const texts=await frameTexts();
       if(texts.length){
         const {cands,hits}=showHits(texts);
-        if(hits.length){
-          stopLive();if(navigator.vibrate)navigator.vibrate(80);
+        // 연속 스캔: 카메라는 켠 채로 두고, 다른 품번을 읽었을 때만 결과를 바꾼다(같은 박스면 깜빡임·진동 없음)
+        const key=hits.map(x=>x.code).join(',');
+        if(hits.length&&key===lastKey){/* 같은 렌즈 — 그대로 둔다 */}
+        else if(hits.length){
+          lastKey=key;if(navigator.vibrate)navigator.vibrate(80);
           $('q').value=cands[0].replace(/^(\d{2,3})(\d{6})$/,'$1-$2');
           status('읽은 바코드: '+texts.join(' / '));render(hits,'');
         }else status('읽은 바코드 '+texts.join(' / ')+' 는 품번이 아닙니다. 다른 바코드에 맞춰 주십시오.');
