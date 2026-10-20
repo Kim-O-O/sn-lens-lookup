@@ -70,10 +70,12 @@ body{margin:0}
 .zoom{display:flex;align-items:center;gap:10px;font-size:14px}.zoom input{flex:1;min-width:0}
 .spec{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
 body.scanning .view{aspect-ratio:auto;height:34vh}
-body.scanning header .sub,body.scanning .link,body.scanning #f,body.scanning .legend,body.scanning #all,body.scanning .foot,body.scanning .card .compat,body.scanning .card a{display:none}
+body.scanning header .sub,body.scanning #camBtn,body.scanning .legend,body.scanning #all,body.scanning .foot,body.scanning .card .compat,body.scanning .card a{display:none}
 body.scanning .wrap{gap:10px;padding-block:8px 24px}
 body.scanning .card{padding:10px 14px}
 body.scanning .name{font-size:24px}
+.minor{display:flex;gap:18px;flex-wrap:wrap}
+body.scanning #live{width:auto;align-self:flex-end;font-size:14px;padding:8px 14px;border-radius:8px;order:-1}
 .link{background:none;border:0;color:var(--ink);text-decoration:underline;font:14px var(--sans);padding:4px 0;cursor:pointer;align-self:flex-start}
 </style>
 </head><body>
@@ -87,9 +89,9 @@ body.scanning .name{font-size:24px}
   <section class="scan" aria-label="조회">
     <button class="btn" type="button" id="live">카메라로 스캔</button>
     <div class="view" id="view" hidden><video id="vid" playsinline muted></video><div class="aim"></div></div>
-    <label class="link" for="cam" id="camBtn" tabindex="0">카메라가 안 되면 사진으로 읽기</label>
     <input id="cam" type="file" accept="image/*" capture="environment" hidden>
-    <form class="row" id="f">
+    <div class="minor"><label class="link" for="cam" id="camBtn" tabindex="0">사진으로 읽기</label><button class="link" type="button" id="manual" aria-expanded="false" aria-controls="f">코드 직접 입력</button></div>
+    <form class="row" id="f" hidden>
       <input id="q" type="text" inputmode="numeric" autocomplete="off" placeholder="예: 115108 또는 140-115108" aria-label="품번 입력">
       <button class="btn2" type="submit">조회</button>
     </form>
@@ -235,6 +237,7 @@ function render(list,raw){
 }
 function status(msg,err){const s=$('st');s.textContent=msg;s.classList.toggle('err',!!err)}
 
+$('manual').addEventListener('click',()=>{const f=$('f'),open=f.hidden;f.hidden=!open;$('manual').setAttribute('aria-expanded',open);if(open){$('q').value='';$('q').focus()}});
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('q').value.trim();if(!v)return;render(lookup(v),v);status('')});
 $('camBtn').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('cam').click()}});
 
