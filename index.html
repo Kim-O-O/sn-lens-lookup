@@ -316,11 +316,12 @@ let stream=null,timer=null,busy=false,lastKey="";
 const vid=$('vid');
 function stopLive(){document.body.classList.remove('scanning');clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('view').hidden=true;$('live').textContent='카메라로 스캔'}
 function showHits(texts){
+  // texts는 중앙에 가까운 순. 목록에 있는 품번이 나오는 첫 바코드만 결과로 쓴다
   const cands=[...new Set(texts.flatMap(candidates))];
-  const hits=[];const seen=new Set();
-  for(const c of cands) for(const x of lookup(c)){const k=x.code+x.name;if(!seen.has(k)){seen.add(k);hits.push(x)}}
-  return {cands,hits};
+  for(const c of cands){const hits=lookup(c).filter(x=>norm(x.code)===c);if(hits.length)return {cands:[c],hits}}
+  return {cands,hits:[]};
 }
+
 // 노란 칸(.aim) 영역만 잘라 판독 — 칸 밖 바코드는 무시. video는 object-fit:cover라 화면→영상 좌표 환산
 // 멀리서 읽기: 연속 자동초점 + 두 손가락 핀치 확대.
 // 카메라가 광학/센서 줌을 지원하면(안드로이드 크롬 등) 그 줌을, 아니면(아이폰 사파리 등) 화면 확대(digital)를 쓴다.
@@ -357,7 +358,9 @@ const STRIPS=[[0,0,1,1],[0,0,1,.4],[0,.3,1,.4],[0,.6,1,.4],[0,0,.6,1],[.4,0,.6,1
 async function frameTexts(){
   const now=Date.now();
   const cv=viewCanvas();if(!cv)return[];
-  if('BarcodeDetector' in window){try{(await new BarcodeDetector().detect(cv)).forEach(r=>seen.set(r.rawValue,now))}catch(_){}}
+  // 화면 중앙까지 거리(0=중앙, 1=모서리)를 함께 기록
+  const put=(t,x,y)=>seen.set(t,{t:now,d:Math.hypot(x/cv.width-.5,y/cv.height-.5)/0.7071});
+  if('BarcodeDetector' in window){try{(await new BarcodeDetector().detect(cv)).forEach(r=>{const b=r.boundingBox;put(r.rawValue,b.x+b.width/2,b.y+b.height/2)})}catch(_){}}
   if(window.ZXing){
     const Z=ZXing;
     const hints=new Map();hints.set(Z.DecodeHintType.TRY_HARDER,true);
@@ -366,12 +369,14 @@ async function frameTexts(){
     for(const [x,y,w,h] of [STRIPS[0],STRIPS[1+(tick++%(STRIPS.length-1))]]){
       const c=document.createElement('canvas');c.width=Math.round(cv.width*w);c.height=Math.round(cv.height*h);
       c.getContext('2d').drawImage(cv,cv.width*x,cv.height*y,c.width,c.height,0,0,c.width,c.height);
-      try{seen.set(rd.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)))).getText(),now)}catch(_){}
+      try{const r=rd.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c))));const ps=r.getResultPoints()||[];
+        const px=ps.length?ps.reduce((a,p)=>a+p.getX(),0)/ps.length:c.width/2,py=ps.length?ps.reduce((a,p)=>a+p.getY(),0)/ps.length:c.height/2;
+        put(r.getText(),cv.width*x+px,cv.height*y+py)}catch(_){}
       rd.reset();
     }
   }
-  for(const [k,t] of seen) if(now-t>2000) seen.delete(k);
-  return [...seen.keys()];
+  for(const [k,v] of seen) if(now-v.t>2000) seen.delete(k);
+  return [...seen.keys()].sort((a,b)=>seen.get(a).d-seen.get(b).d); // 중앙에 가까운 순
 }
 $('live').addEventListener('click',async()=>{
   if(stream){stopLive();status('');return}
