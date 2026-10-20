@@ -65,6 +65,7 @@ body{margin:0}
 .view{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3;max-width:100%}
 .view video{width:100%;height:100%;object-fit:cover;display:block}
 .view .aim{position:absolute;left:8%;right:8%;top:34%;height:32%;border:3px solid #ffd400;border-radius:6px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+.zoom{display:flex;align-items:center;gap:10px;font-size:14px}.zoom input{flex:1;min-width:0}
 .link{background:none;border:0;color:var(--ink);text-decoration:underline;font:14px var(--sans);padding:4px 0;cursor:pointer;align-self:flex-start}
 </style>
 </head><body>
@@ -78,6 +79,7 @@ body{margin:0}
   <section class="scan" aria-label="조회">
     <button class="btn" type="button" id="live">카메라로 스캔</button>
     <div class="view" id="view" hidden><video id="vid" playsinline muted></video><div class="aim"></div></div>
+    <label class="zoom" id="zoomRow" hidden>확대 <input id="zoom" type="range" step="0.1"></label>
     <label class="link" for="cam" id="camBtn" tabindex="0">카메라가 안 되면 사진으로 읽기</label>
     <input id="cam" type="file" accept="image/*" capture="environment" hidden>
     <form class="row" id="f">
@@ -287,7 +289,7 @@ for(const r of CUR){
 // 실시간 스캔: 후면 카메라 → 0.25초마다 프레임 판독 → 품번이면 멈추고 결과 표시
 let stream=null,timer=null,busy=false,lastKey="";
 const vid=$('vid');
-function stopLive(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('view').hidden=true;$('live').textContent='카메라로 스캔'}
+function stopLive(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('view').hidden=true;$('zoomRow').hidden=true;$('live').textContent='카메라로 스캔'}
 function showHits(texts){
   const cands=[...new Set(texts.flatMap(candidates))];
   const hits=[];const seen=new Set();
@@ -295,13 +297,26 @@ function showHits(texts){
   return {cands,hits};
 }
 // 노란 칸(.aim) 영역만 잘라 판독 — 칸 밖 바코드는 무시. video는 object-fit:cover라 화면→영상 좌표 환산
+// 멀리서 읽기: 연속 자동초점, 줌 가능 기종이면 2배로 시작하고 슬라이더 제공
+async function setupZoom(track){
+  $('zoomRow').hidden=true;
+  try{await track.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(_){}
+  const c=track.getCapabilities?track.getCapabilities():{};
+  if(!c.zoom)return;
+  const z=$('zoom');z.min=c.zoom.min;z.max=c.zoom.max;z.step=c.zoom.step||0.1;
+  z.value=Math.min(2,c.zoom.max);
+  try{await track.applyConstraints({advanced:[{zoom:+z.value}]})}catch(_){}
+  z.oninput=()=>track.applyConstraints({advanced:[{zoom:+z.value}]}).catch(()=>{});
+  $('zoomRow').hidden=false;
+}
 function aimCanvas(){
   const W=vid.videoWidth,H=vid.videoHeight;if(!W)return null;
   const v=$('view').getBoundingClientRect(),a=document.querySelector('.view .aim').getBoundingClientRect();
   const s=Math.max(v.width/W,v.height/H),ox=(W*s-v.width)/2,oy=(H*s-v.height)/2;
   const sx=(a.left-v.left+ox)/s,sy=(a.top-v.top+oy)/s,sw=a.width/s,sh=a.height/s;
-  const cv=document.createElement('canvas');cv.width=Math.round(sw);cv.height=Math.round(sh);
-  cv.getContext('2d').drawImage(vid,sx,sy,sw,sh,0,0,cv.width,cv.height);
+  const up=Math.max(1,1200/sw);const cv=document.createElement('canvas');cv.width=Math.round(sw*up);cv.height=Math.round(sh*up);
+  const g=cv.getContext('2d');g.imageSmoothingEnabled=true;
+  g.drawImage(vid,sx,sy,sw,sh,0,0,cv.width,cv.height);
   return cv;
 }
 async function frameTexts(){
@@ -311,6 +326,7 @@ async function frameTexts(){
   if(!found.size&&window.ZXing){
     const Z=ZXing;
     const hints=new Map();hints.set(Z.DecodeHintType.TRY_HARDER,true);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.CODE_39,Z.BarcodeFormat.EAN_13,Z.BarcodeFormat.UPC_A,Z.BarcodeFormat.ITF,Z.BarcodeFormat.QR_CODE,Z.BarcodeFormat.DATA_MATRIX]);
     const rd=new Z.MultiFormatReader();rd.setHints(hints);
     try{found.add(rd.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv)))).getText())}catch(_){}
   }
@@ -320,9 +336,10 @@ $('live').addEventListener('click',async()=>{
   if(stream){stopLive();status('');return}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('이 브라우저는 카메라를 지원하지 않습니다. 사진으로 읽기를 써 주십시오.',true);return}
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}},audio:false});
   }catch(err){status('카메라를 켜지 못했습니다. 브라우저 설정에서 이 사이트의 카메라 권한을 허용해 주십시오.',true);stream=null;return}
   vid.srcObject=stream;await vid.play();
+  setupZoom(stream.getVideoTracks()[0]);
   $('view').hidden=false;$('live').textContent='스캔 멈추기';$('results').textContent='';
   lastKey="";status("바코드를 노란 칸에 맞춰 주십시오. 박스를 바꿔 가며 계속 스캔할 수 있습니다.");
   timer=setInterval(async()=>{
