@@ -388,6 +388,10 @@ $('live').addEventListener('click',async()=>{
           lastKey=key;if(navigator.vibrate)navigator.vibrate(80);
           $('q').value=cands[0].replace(/^(\d{2,3})(\d{6})$/,'$1-$2');
           status(texts.join(' / '));render(hits,'');
+        }else if(cands.length){
+          // 품번 형식인데 목록에 없음 → 이전 결과를 지우고 '목록에 없음' 표시
+          const k='x:'+cands.join();if(k!==lastKey){lastKey=k;render([],cands.map(c=>c.replace(/^(\d{2,3})(\d{6})$/,'$1-$2')).join(' / '))}
+          status(texts.join(' / '));
         }else status(texts.join(' / ')+' - 품번 아님');
       }
     }finally{busy=false}
